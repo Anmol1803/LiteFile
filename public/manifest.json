@@ -1,0 +1,16 @@
+{
+  "name": "LiteFile",
+  "short_name": "LiteFile",
+  "description": "Professional PDF & image tools – 100% client-side",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#6366f1",
+  "background_color": "#ffffff",
+  "icons": [
+  {
+    "src": "/LiteFile.png",
+    "sizes": "any",
+    "type": "image/png"
+  }
+]
+}
