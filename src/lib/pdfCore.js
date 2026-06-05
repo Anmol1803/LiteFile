@@ -112,6 +112,11 @@ export async function pdfToRtf(file, onProgress) {
 }
 
 // ─── PDF COMPRESSION ────────────────────────────────────────────────────────
+
+if (typeof navigator !== 'undefined' && navigator.deviceMemory && navigator.deviceMemory < 4) {
+  console.warn('Low memory device – PDF compression may be slow');
+}
+
 export async function compressPdfToTarget(file, targetBytes, onProgress) {
   const QUALITY_STEPS = [0.7, 0.55, 0.4, 0.28, 0.18, 0.1, 0.05];
   let lastBlob = null;
@@ -141,26 +146,32 @@ export async function compressPdf(file, quality = 0.6, onProgress) {
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
   const totalPages = pdfDoc.getPageCount();
+  const newPdf = await PDFDocument.create();
+  const chunkSize = 5; // process in chunks to avoid memory spikes
 
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
   const pdfJsDoc = await loadingTask.promise;
-  const newPdf = await PDFDocument.create();
 
-  for (let i = 0; i < totalPages; i++) {
-    if (onProgress) onProgress(Math.round((i / totalPages) * 100));
-    const page = await pdfJsDoc.getPage(i + 1);
-    const viewport = page.getViewport({ scale: 1.5 });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext('2d');
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    const imgDataUrl = canvas.toDataURL('image/jpeg', quality);
-    const base64 = imgDataUrl.split(',')[1];
-    const imgBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-    const jpgImage = await newPdf.embedJpg(imgBytes);
-    const newPage = newPdf.addPage([viewport.width, viewport.height]);
-    newPage.drawImage(jpgImage, { x: 0, y: 0, width: viewport.width, height: viewport.height });
+  for (let start = 0; start < totalPages; start += chunkSize) {
+    const end = Math.min(start + chunkSize, totalPages);
+    for (let i = start; i < end; i++) {
+      if (onProgress) onProgress(Math.round((i / totalPages) * 100));
+      const page = await pdfJsDoc.getPage(i + 1);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const imgDataUrl = canvas.toDataURL('image/jpeg', quality);
+      const base64 = imgDataUrl.split(',')[1];
+      const imgBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      const jpgImage = await newPdf.embedJpg(imgBytes);
+      const newPage = newPdf.addPage([viewport.width, viewport.height]);
+      newPage.drawImage(jpgImage, { x: 0, y: 0, width: viewport.width, height: viewport.height });
+    }
+    // Yield to event loop to allow garbage collection
+    await new Promise(resolve => setTimeout(resolve, 0));
   }
 
   if (onProgress) onProgress(100);

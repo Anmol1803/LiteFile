@@ -34,19 +34,31 @@ export default function PdfSecurity() {
     if (f?.name.toLowerCase().endsWith('.pdf')) { setFile(f); setResults([]); setError(''); }
   };
 
-  const apply = async () => {
-    setError('');
-    if (!password) return setError('Please enter a password');
-    if (mode === 'add' && password !== confirmPassword) return setError('Passwords do not match');
+// In PdfSecurity.jsx, replace the apply function:
 
-    setStatus('processing');
-    setProgress(30);
+const apply = async () => {
+  setError('');
+  if (!password && mode === 'add') return setError('Please enter a password');
+  if (mode === 'add' && password !== confirmPassword) return setError('Passwords do not match');
 
-    const blob = await encryptPdf(file, mode === 'add' ? password : '', mode === 'add' ? password : '', permissions);
-    setProgress(100);
-    setResults([{ blob, name: file.name.replace('.pdf', mode === 'add' ? '_protected.pdf' : '_unlocked.pdf'), size: blob.size }]);
-    setStatus('done');
-  };
+  setStatus('processing');
+  setProgress(30);
+
+  let blob;
+  if (mode === 'add') {
+    blob = await encryptPdf(file, password, password, permissions);
+  } else {
+    // Remove password – save without encryption
+    const ab = await readFileAsArrayBuffer(file);
+    const pdfDoc = await PDFDocument.load(ab, { ignoreEncryption: true });
+    const bytes = await pdfDoc.save(); // no passwords
+    blob = new Blob([bytes], { type: 'application/pdf' });
+  }
+
+  setProgress(100);
+  setResults([{ blob, name: file.name.replace('.pdf', mode === 'add' ? '_protected.pdf' : '_unlocked.pdf'), size: blob.size }]);
+  setStatus('done');
+};
 
   const setPerm = (key, val) => setPermissions(p => ({ ...p, [key]: val }));
 

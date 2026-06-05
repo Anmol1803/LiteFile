@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RotateCw, FlipHorizontal, FlipVertical, Lock, Unlock } from 'lucide-react';
 import { SIZE_PRESETS } from '@/lib/imageUtils';
 
-export default function TransformPanel({ img, rotation, onRotation, flippedH, flippedV, onFlipH, onFlipV, cropRect, onCropRect, resizeW, resizeH, onResize, lockAspect, onLockAspect }) {
+export default function TransformPanel({ 
+  img, rotation, onRotation, 
+  flippedH, flippedV, onFlipH, onFlipV, 
+  cropRect, onCropRect, 
+  resizeW, resizeH, onResize, lockAspect, onLockAspect,
+  cropMode, setCropMode 
+}) {
   const [unit, setUnit] = useState('px');
   const [resizeMode, setResizeMode] = useState('pixels');
   const [dpi, setDpi] = useState(72);
@@ -138,9 +144,15 @@ export default function TransformPanel({ img, rotation, onRotation, flippedH, fl
 
         {/* CROP */}
         <TabsContent value="crop" className="space-y-3 mt-3">
-          <p className="text-xs text-muted-foreground">Ratio presets (crop is applied on export)</p>
+          <div className="flex items-center justify-between p-2 rounded-lg bg-primary/5 border border-primary/20">
+            <Label className="text-xs font-semibold">✂ Crop Mode</Label>
+            <Switch checked={cropMode} onCheckedChange={setCropMode} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {cropMode ? 'Drag on canvas to select crop area. Drawing tools are disabled.' : 'Turn on Crop Mode to crop, then turn off to draw.'}
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">Ratio presets (apply after cropping)</p>
           <div className="grid grid-cols-3 gap-1.5">
-            <Button variant={cropRatio === 'free' ? 'default' : 'outline'} size="sm" className="text-xs" onClick={() => { setCropRatio('free'); onCropRect(null); }}>Free</Button>
             {SIZE_PRESETS.ratio.map(r => (
               <Button key={r.label} variant={cropRatio === r.label ? 'default' : 'outline'} size="sm" className="text-xs"
                 onClick={() => applyRatioPreset(r)}>{r.label}</Button>

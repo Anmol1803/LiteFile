@@ -191,6 +191,9 @@ export default function CropImage() {
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
+                    onTouchStart={(e) => { e.preventDefault(); const touch = e.touches[0]; const fakeEvent = { clientX: touch.clientX, clientY: touch.clientY }; handleMouseDown(fakeEvent); }}
+                    onTouchMove={(e) => { e.preventDefault(); const touch = e.touches[0]; const fakeEvent = { clientX: touch.clientX, clientY: touch.clientY }; handleMouseMove(fakeEvent); }}
+                    onTouchEnd={handleMouseUp}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 text-center">

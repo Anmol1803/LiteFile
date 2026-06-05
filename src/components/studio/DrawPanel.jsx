@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const DRAW_TOOLS = [
+  { id: 'select', label: '🖱️ Select' },
   { id: 'pen', label: '✏ Pen' },
   { id: 'brush', label: '🖌 Brush' },
   { id: 'highlighter', label: '🟡 Highlight' },

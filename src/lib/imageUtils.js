@@ -10,7 +10,6 @@ export async function heicToBlob(file, targetFormat = 'image/jpeg') {
   return blob;
 }
 
-
 export function loadImage(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -62,72 +61,48 @@ export function getExtension(mimeType) {
   return map[mimeType] || 'png';
 }
 
-// Returns { blob, achieved } - achieved = actual size reached
-// Returns { blob: null, minBlob, minSize } if target is unreachable
 export async function compressToTargetSize(img, targetBytes, format = 'image/jpeg') {
-  // Phase 1: Binary search on quality (full resolution)
   let lo = 0.01, hi = 1.0, bestBlob = null;
   const canvas = imageToCanvas(img);
-
   for (let i = 0; i < 16; i++) {
     const mid = (lo + hi) / 2;
     const blob = await canvasToBlob(canvas, format, mid);
-    if (blob.size <= targetBytes) {
-      bestBlob = blob;
-      lo = mid;
-    } else {
-      hi = mid;
-    }
+    if (blob.size <= targetBytes) { bestBlob = blob; lo = mid; }
+    else hi = mid;
   }
   if (bestBlob) return { blob: bestBlob, achieved: bestBlob.size, success: true };
-
-  // Phase 2: Reduce resolution iteratively
   for (let scale = 0.9; scale >= 0.05; scale -= 0.05) {
     const w = Math.max(1, Math.round(img.naturalWidth * scale));
     const h = Math.max(1, Math.round(img.naturalHeight * scale));
     const smallCanvas = imageToCanvas(img, w, h);
-    // Try quality range on this scale
     for (let q = 0.7; q >= 0.05; q -= 0.1) {
       const blob = await canvasToBlob(smallCanvas, format, q);
       if (blob.size <= targetBytes) return { blob, achieved: blob.size, success: true };
     }
   }
-
-  // Phase 3: Absolute minimum — 1% quality, 10% resolution
   const minCanvas = imageToCanvas(img, Math.max(1, Math.round(img.naturalWidth * 0.1)), Math.max(1, Math.round(img.naturalHeight * 0.1)));
   const minBlob = await canvasToBlob(minCanvas, format, 0.01);
   return { blob: null, minBlob, minSize: minBlob.size, success: false };
 }
 
 export function applyFilters(canvas, adjustments) {
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
-
   const {
     brightness = 0, contrast = 0, saturation = 0, temperature = 0,
     tint = 0, gamma = 1, exposure = 0, highlights = 0, shadows = 0,
     vibrance = 0, clarity = 0, sharpness = 0,
   } = adjustments;
-
   const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
   const exposureFactor = Math.pow(2, exposure / 100);
-
   for (let i = 0; i < data.length; i += 4) {
-    let r = data[i], g = data[i + 1], b = data[i + 2];
-
-    // Exposure
+    let r = data[i], g = data[i+1], b = data[i+2];
     r *= exposureFactor; g *= exposureFactor; b *= exposureFactor;
-
-    // Brightness
     r += brightness * 2.55; g += brightness * 2.55; b += brightness * 2.55;
-
-    // Contrast
     r = contrastFactor * (r - 128) + 128;
     g = contrastFactor * (g - 128) + 128;
     b = contrastFactor * (b - 128) + 128;
-
-    // Highlights / Shadows
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
     if (highlights !== 0 && lum > 128) {
       const f = highlights * 0.5 * ((lum - 128) / 127);
@@ -137,23 +112,15 @@ export function applyFilters(canvas, adjustments) {
       const f = shadows * 0.5 * ((128 - lum) / 128);
       r += f; g += f; b += f;
     }
-
-    // Temperature
     r += temperature * 1.5; b -= temperature * 1.5;
-
-    // Tint
     g += tint * 1.5;
-
-    // Saturation
     const gray = 0.2989 * r + 0.587 * g + 0.114 * b;
     const satFactor = 1 + saturation / 100;
     r = gray + satFactor * (r - gray);
     g = gray + satFactor * (g - gray);
     b = gray + satFactor * (b - gray);
-
-    // Vibrance (smart saturation - boosts less-saturated colors more)
     if (vibrance !== 0) {
-      const maxC = Math.max(r, g, b), minC = Math.min(r, g, b);
+      const maxC = Math.max(r,g,b), minC = Math.min(r,g,b);
       const sat = (maxC - minC) / (maxC + 0.0001);
       const vf = (1 - sat) * (vibrance / 100);
       const vGray = 0.2989 * r + 0.587 * g + 0.114 * b;
@@ -161,51 +128,42 @@ export function applyFilters(canvas, adjustments) {
       g = vGray + (1 + vf) * (g - vGray);
       b = vGray + (1 + vf) * (b - vGray);
     }
-
-    // Gamma
     if (gamma !== 1) {
       r = 255 * Math.pow(Math.max(0, r) / 255, 1 / gamma);
       g = 255 * Math.pow(Math.max(0, g) / 255, 1 / gamma);
       b = 255 * Math.pow(Math.max(0, b) / 255, 1 / gamma);
     }
-
     data[i] = Math.min(255, Math.max(0, r));
-    data[i + 1] = Math.min(255, Math.max(0, g));
-    data[i + 2] = Math.min(255, Math.max(0, b));
+    data[i+1] = Math.min(255, Math.max(0, g));
+    data[i+2] = Math.min(255, Math.max(0, b));
   }
-
   ctx.putImageData(imageData, 0, 0);
-
-  // Sharpness via unsharp mask (basic convolution)
-  if (sharpness > 0) {
-    applySharpness(canvas, sharpness / 100);
-  }
-
+  if (sharpness > 0) applySharpness(canvas, sharpness / 100);
   return canvas;
 }
 
 function applySharpness(canvas, amount) {
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const w = canvas.width, h = canvas.height;
   const src = ctx.getImageData(0, 0, w, h);
   const dst = ctx.createImageData(w, h);
   const s = src.data, d = dst.data;
-  const kernel = [-1, -1, -1, -1, 9, -1, -1, -1, -1]; // sharpen kernel scaled by amount
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
+  const kernel = [-1, -1, -1, -1, 9, -1, -1, -1, -1];
+  for (let y = 1; y < h-1; y++) {
+    for (let x = 1; x < w-1; x++) {
       const idx = (y * w + x) * 4;
       for (let c = 0; c < 3; c++) {
         let val = 0;
         for (let ky = -1; ky <= 1; ky++) {
           for (let kx = -1; kx <= 1; kx++) {
-            const ki = (ky + 1) * 3 + (kx + 1);
-            const si = ((y + ky) * w + (x + kx)) * 4 + c;
+            const ki = (ky+1)*3 + (kx+1);
+            const si = ((y+ky)*w + (x+kx))*4 + c;
             val += s[si] * kernel[ki];
           }
         }
-        d[idx + c] = Math.min(255, Math.max(0, s[idx + c] * (1 - amount) + val * amount));
+        d[idx+c] = Math.min(255, Math.max(0, s[idx+c] * (1 - amount) + val * amount));
       }
-      d[idx + 3] = s[idx + 3];
+      d[idx+3] = s[idx+3];
     }
   }
   ctx.putImageData(dst, 0, 0);
@@ -241,9 +199,9 @@ export function rotateCanvas(canvas, degrees) {
   const rotated = document.createElement('canvas');
   rotated.width = newW; rotated.height = newH;
   const ctx = rotated.getContext('2d');
-  ctx.translate(newW / 2, newH / 2);
+  ctx.translate(newW/2, newH/2);
   ctx.rotate(rad);
-  ctx.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
+  ctx.drawImage(canvas, -canvas.width/2, -canvas.height/2);
   return rotated;
 }
 
@@ -288,13 +246,12 @@ export function addTextWatermark(canvas, options) {
       }
     }
   } else {
-    ctx.translate(canvas.width / 2, canvas.height / 2); ctx.rotate((rotation * Math.PI) / 180); ctx.fillText(text, 0, 0);
+    ctx.translate(canvas.width/2, canvas.height/2); ctx.rotate((rotation * Math.PI) / 180); ctx.fillText(text, 0, 0);
   }
   ctx.restore();
   return canvas;
 }
 
-// Social media & document size presets (in pixels at 96dpi)
 export const SIZE_PRESETS = {
   social: [
     { label: 'Instagram Post', w: 1080, h: 1080 },
@@ -327,14 +284,14 @@ export const SIZE_PRESETS = {
     { label: 'Legal', w: 2550, h: 4200 },
   ],
   ratio: [
-    { label: '1:1', ratio: 1 / 1 },
-    { label: '4:3', ratio: 4 / 3 },
-    { label: '3:4', ratio: 3 / 4 },
-    { label: '16:9', ratio: 16 / 9 },
-    { label: '9:16', ratio: 9 / 16 },
-    { label: '5:4', ratio: 5 / 4 },
-    { label: '2:3', ratio: 2 / 3 },
-    { label: '3:2', ratio: 3 / 2 },
-    { label: '21:9', ratio: 21 / 9 },
+    { label: '1:1', ratio: 1/1 },
+    { label: '4:3', ratio: 4/3 },
+    { label: '3:4', ratio: 3/4 },
+    { label: '16:9', ratio: 16/9 },
+    { label: '9:16', ratio: 9/16 },
+    { label: '5:4', ratio: 5/4 },
+    { label: '2:3', ratio: 2/3 },
+    { label: '3:2', ratio: 3/2 },
+    { label: '21:9', ratio: 21/9 },
   ],
 };

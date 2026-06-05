@@ -66,10 +66,29 @@ export default function CompressImage() {
         if (!target) continue;
         const result = await compressToTargetSize(img, target, 'image/jpeg');
         if (result.success) {
-          newResults.push({ name: file.name.replace(/\.[^.]+$/, '_compressed.jpg'), originalSize: file.size, compressedSize: result.blob.size, blob: result.blob, width: img.naturalWidth, height: img.naturalHeight, originalWidth: img.naturalWidth, originalHeight: img.naturalHeight });
+          newResults.push({
+            name: file.name.replace(/\.[^.]+$/, '_compressed.jpg'),
+            originalSize: file.size,
+            compressedSize: result.blob.size,
+            blob: result.blob,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+          });
         } else {
-          warns.push({ filename: file.name, requestedSize: target, minSize: result.minSize });
-          newResults.push({ name: file.name.replace(/\.[^.]+$/, '_compressed.jpg'), originalSize: file.size, compressedSize: result.minBlob.size, blob: result.minBlob, width: img.naturalWidth, height: img.naturalHeight, originalWidth: img.naturalWidth, originalHeight: img.naturalHeight, warning: true });
+          warns.push({
+            filename: file.name,
+            requestedSize: target,
+            minSize: result.minSize,
+          });
+          newResults.push({
+            name: file.name.replace(/\.[^.]+$/, '_compressed.jpg'),
+            originalSize: file.size,
+            compressedSize: result.minBlob.size,
+            blob: result.minBlob,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            warning: true,
+          });
         }
       } else {
         let canvas = imageToCanvas(img);
@@ -78,7 +97,16 @@ export default function CompressImage() {
           canvas = imageToCanvas(img, Math.round(img.naturalWidth * scale), Math.round(img.naturalHeight * scale));
         }
         const blob = await canvasToBlob(canvas, mimeMap[outputFormat] || 'image/jpeg', quality / 100);
-        newResults.push({ name: file.name.replace(/\.[^.]+$/, `.${outputFormat}`), originalSize: file.size, compressedSize: blob.size, blob, width: canvas.width, height: canvas.height, originalWidth: img.naturalWidth, originalHeight: img.naturalHeight });
+        newResults.push({
+          name: file.name.replace(/\.[^.]+$/, `.${outputFormat}`),
+          originalSize: file.size,
+          compressedSize: blob.size,
+          blob,
+          width: canvas.width,
+          height: canvas.height,
+          originalWidth: img.naturalWidth,
+          originalHeight: img.naturalHeight,
+        });
       }
     }
 
@@ -174,12 +202,9 @@ export default function CompressImage() {
             </div>
 
             <Button onClick={compress} disabled={processing || (mode === 'target' && !getTargetBytes())} className="w-full h-12 text-base rounded-xl">
-              {processing
-                ? <><Loader2 className="w-5 h-5 animate-spin mr-2" />Compressing {currentIdx + 1}/{files.length}…</>
-                : <><Minimize2 className="w-5 h-5 mr-2" />Compress {files.length} image{files.length > 1 ? 's' : ''}</>}
+              {processing ? <><Loader2 className="w-5 h-5 animate-spin mr-2" />Compressing {currentIdx + 1}/{files.length}…</> : <><Minimize2 className="w-5 h-5 mr-2" />Compress {files.length} image{files.length > 1 ? 's' : ''}</>}
             </Button>
 
-            {/* Warnings */}
             <AnimatePresence>
               {warnings.map((w, i) => (
                 <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
@@ -198,7 +223,6 @@ export default function CompressImage() {
                       <p className="font-semibold text-amber-600 dark:text-amber-400">{formatFileSize(w.minSize)}</p>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground"><strong>Reason:</strong> Further compression would cause unacceptable image degradation (image would become unrecognizable).</p>
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -226,7 +250,7 @@ export default function CompressImage() {
                             <span className={reduction > 0 ? 'text-green-500 font-medium' : 'text-muted-foreground'}>
                               {reduction > 0 ? `-${reduction}%` : `+${Math.abs(Number(reduction))}%`}
                             </span>
-                            <span>{r.originalWidth}×{r.originalHeight}{r.width !== r.originalWidth ? ` → ${r.width}×${r.height}` : ''}</span>
+                            <span>{r.width}×{r.height}</span>
                           </div>
                         </div>
                         <Button size="sm" variant="outline" onClick={() => downloadBlob(r.blob, r.name)}>
